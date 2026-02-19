@@ -121,13 +121,14 @@ STATIC_URL = 'static/'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'movie_recommendation_system',
-        'USER': 'root',
-        'PASSWORD': 'Joy@0912',
+        'NAME': 'Your_DATABASE_NAME',
+        'USER': 'Your_USERNAME',
+        'PASSWORD': 'Your_PASSWORD',
         'HOST': 'localhost',
         'PORT': '3306',
     }
 }
 
-TMDB_ACCESS_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIwNDZhYThhNzEwOGUxZDg0Yzg4MmI0MDQyZWNmMjY1MSIsIm5iZiI6MTc3MTQwNjI5MS43MjcsInN1YiI6IjY5OTU4M2QzMDZkZDViY2UxMzI4OGE5MSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.15aDdcFauIH5WR7IpPKPYOpH7XvpEZudJgcg9RhiArE"
+TMDB_ACCESS_TOKEN = "Your_TMDB_ACCESS_TOKEN"
+
 TIME_ZONE = "UTC"
