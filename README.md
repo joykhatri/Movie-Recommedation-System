@@ -65,3 +65,10 @@ python manage.py migrate
 ```bash
 python manage.py runserver
 ```
+
+## 🔑 API Endpoints
+
+### Fetch Trending Content
+| Method | Endpoint                    | Description    |
+| ------ | --------------------------- | -------------- |
+| GET    | `/api/trending/`            | Get Trending Content    |
