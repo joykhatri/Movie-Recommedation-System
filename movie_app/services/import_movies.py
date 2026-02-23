@@ -2,8 +2,9 @@ import requests
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 from django.conf import settings
-from movie_app.models import TrendingContent, Actor
+from movie_app.models import TrendingContent, Actor, Movie, UpcomingContent
 import time
+from datetime import datetime, date
 
 BASE_URL = "https://api.themoviedb.org/3"
 TMDB_API_KEY = settings.TMDB_API_KEY
@@ -15,7 +16,7 @@ session.mount("https://", HTTPAdapter(max_retries=retries))
 
 # Fetch Trending Movies
 
-def fetch_trending(media_type="movie"):
+def fetch_trending_movies(media_type="movie"):
     url = f"{BASE_URL}/trending/movie/day"
     params = {"api_key": TMDB_API_KEY}
 
@@ -53,7 +54,7 @@ def fetch_trending(media_type="movie"):
         except requests.RequestException as e:
             print(f"Exception fetching details for {title} ({tmdb_id}): {e}")
 
-        print(f"Saving movie: {title} ({tmdb_id})")  # debug
+        print(f"Saving movie: {title} ({tmdb_id})")
 
         try:
             trending_obj, _ = TrendingContent.objects.update_or_create(
@@ -82,7 +83,7 @@ def fetch_trending(media_type="movie"):
 
 # Fetch Trending TV Shows
 
-def fetch_trending(media_type="tv"):
+def fetch_trending_tv(media_type="tv"):
     url = f"{BASE_URL}/trending/tv/day"
     params = {"api_key": TMDB_API_KEY}
 
@@ -246,3 +247,235 @@ def fetch_popular_actors():
         time.sleep(0.5)
 
 
+def fetch_popular_content(media_type="tv"):
+    # url = f"{BASE_URL}/movie/popular"
+    url = f"{BASE_URL}/tv/popular"
+    params = {
+        "api_key": TMDB_API_KEY,
+        "page": 5,
+        "append_to_response": "credits"
+    }
+
+    try:
+        response = session.get(url, params=params, timeout=10)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Failed to fetch popular content: {e}")
+        return
+
+    contents_data = response.json()
+
+    for content_data in contents_data.get("results", []):
+        content_id = content_data.get("id")
+        title = content_data.get("title") or content_data.get("name")
+        release_date = content_data.get("release_date") or content_data.get("first_air_date") or None
+
+        genres, tagline = [], ""
+        detail_url = f"{BASE_URL}/tv/{content_id}"
+
+        try:
+            detail_response = session.get(
+                detail_url,
+                params={"api_key": TMDB_API_KEY, "append_to_response": "credits"},
+                timeout=10
+            )
+            if detail_response.status_code == 200:
+                detail_data = detail_response.json()
+                genres = [g['name'] for g in detail_data.get("genres", [])]
+                tagline = detail_data.get("tagline") or ""
+            else:
+                print(f"Failed to fetch details for {title}")
+        except requests.RequestException as e:
+            print(f"Exception fetching details for {title}: {e}")
+            
+        print(f"Saving content: {title}")
+
+        try:
+            content, _ = Movie.objects.update_or_create(
+                tmdb_id=content_id,
+                defaults={
+                    "title": title,
+                    "media_type": media_type,
+                    "overview": detail_data.get("overview"),
+                    "tagline": tagline,
+                    "genres": genres,
+                    "release_date": release_date,
+                    "popularity": detail_data.get("popularity"),
+                    "vote_average": detail_data.get("vote_average"),
+                    "poster_path": detail_data.get("poster_path"),
+                    "backdrop_path": detail_data.get("backdrop_path"),
+                },
+            )
+        except Exception as e:
+            print(f"Error saving {title}: {e}")
+
+        fetch_and_save_cast(content_id, media_type, content)
+        time.sleep(2)
+    print("Popular Content synced successfully")
+
+
+def fetch_upcoming_content(media_type="movie"):
+    if media_type == "movie":
+        url = f"{BASE_URL}/movie/upcoming"
+    elif media_type == "tv":
+        url = f"{BASE_URL}/tv/on_the_air"
+    else:
+        return
+
+    params = {
+        "api_key": TMDB_API_KEY,
+        "page": 2,
+        "append_to_response": "credits"
+    }
+
+    try:
+        response = session.get(url, params=params, timeout=10)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Failed to fetch upcoming content: {e}")
+        return
+
+    contents_data = response.json()
+
+    for content_data in contents_data.get("results", []):
+        content_id = content_data.get("id")
+        title = content_data.get("title") or content_data.get("name")
+        release_date = content_data.get("release_date") or content_data.get("first_air_date")
+
+        try:
+            release_date_obj = date.fromisoformat(release_date)
+        except ValueError as e:
+            continue
+
+        if release_date_obj <= date.today():
+            continue
+
+        genres, tagline = [], ""
+        detail_url = f"{BASE_URL}/{media_type}/{content_id}"
+
+        try:
+            detail_response = session.get(
+                detail_url,
+                params={"api_key": TMDB_API_KEY, "append_to_response": "credits"},
+                timeout=10
+            )
+            if detail_response.status_code == 200:
+                detail_data = detail_response.json()
+                genres = [g['name'] for g in detail_data.get("genres", [])]
+                tagline = detail_data.get("tagline") or ""
+            else:
+                print(f"Failed to fetch details for {title}")
+        except requests.RequestException as e:
+            print(f"Exception fetching details for {title}: {e}")
+        print(f"Saving content: {title}")
+
+        try:
+             content, _ = UpcomingContent.objects.update_or_create(
+                tmdb_id=content_id,
+                defaults={
+                    "title": title,
+                    "media_type": media_type,
+                    "overview": detail_data.get("overview"),
+                    "genres": genres,
+                    "tagline": tagline,
+                    "release_date": release_date,
+                    "popularity": detail_data.get("popularity"),
+                    "poster_path": detail_data.get("poster_path"),
+                    "backdrop_path": detail_data.get("backdrop_path")
+                }
+            )
+        except Exception as e:
+            print(f"Error saving {title}: {e}")
+        
+        fetch_and_save_cast(content_id, media_type, content)
+        time.sleep(2)
+    print(f"Upcoming {media_type} synced successfully")
+
+
+def fetch_upcoming_hindi_content(media_type="tv"):
+    if media_type == "movie":
+        url = f"{BASE_URL}/discover/movie"
+        date_field = "primary_release_date.gte"
+        sort_field = "primary_release_date.asc"
+    else:
+        url = f"{BASE_URL}/discover/tv"
+        date_field = "first_air_date.gte"
+        sort_field = "first_air_date.asc"
+
+    params = {
+        "api_key": TMDB_API_KEY,
+        "with_original_language": "hi",
+        "region": "IN",
+        date_field: date.today().isoformat(),
+        "sort_by": sort_field,
+        "page": 2
+    }
+
+    try:
+        response = session.get(url, params=params, timeout=10)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Failed to fetch upcoming content: {e}")
+        return
+
+    contents_data = response.json()
+
+    for content_data in contents_data.get("results", []):
+        content_id = content_data.get("id")
+        title = content_data.get("title") or content_data.get("name")
+        release_date = content_data.get("release_date") or content_data.get("first_air_date")
+
+        try:
+            release_date_obj = date.fromisoformat(release_date)
+        except ValueError as e:
+            continue
+
+        if release_date_obj <= date.today():
+            continue
+
+        genres, tagline = [], ""
+        detail_url = f"{BASE_URL}/{media_type}/{content_id}"
+
+        try:
+            detail_response = session.get(
+                detail_url,
+                params={"api_key": TMDB_API_KEY, "append_to_response": "credits"},
+                timeout=10
+            )
+            if detail_response.status_code == 200:
+                detail_data = detail_response.json()
+                genres = [g['name'] for g in detail_data.get("genres", [])]
+                tagline = detail_data.get("tagline") or ""
+            else:
+                print(f"Failed to fetch details for {title}")
+        except requests.RequestException as e:
+            print(f"Exception fetching details for {title}: {e}")
+        print(f"Saving content: {title}")
+
+        try:
+             content, _ = UpcomingContent.objects.update_or_create(
+                tmdb_id=content_id,
+                defaults={
+                    "title": title,
+                    "media_type": media_type,
+                    "overview": detail_data.get("overview"),
+                    "genres": genres,
+                    "tagline": tagline,
+                    "release_date": release_date,
+                    "popularity": detail_data.get("popularity"),
+                    "poster_path": detail_data.get("poster_path"),
+                    "backdrop_path": detail_data.get("backdrop_path")
+                }
+            )
+        except Exception as e:
+            print(f"Error saving {title}: {e}")
+        
+        fetch_and_save_cast(content_id, media_type, content)
+        time.sleep(2)
+    print(f"Upcoming {media_type} synced successfully")
+
+
+def remove_released_content():
+    UpcomingContent.objects.filter(
+        release_date__lte=date.today()
+    ).delete()
