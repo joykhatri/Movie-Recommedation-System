@@ -68,7 +68,7 @@ python manage.py runserver
 
 ## 🔑 API Endpoints
 
-### Fetch Trending Content
+### Fetch Content
 | Method | Endpoint                                    | Description            |
 | ------ | ------------------------------------------- | ---------------------- |
 | GET    | `/api/trending/`                            | Get Trending Content   |
