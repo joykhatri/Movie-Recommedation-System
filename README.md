@@ -69,6 +69,15 @@ python manage.py runserver
 ## 🔑 API Endpoints
 
 ### Fetch Trending Content
-| Method | Endpoint                    | Description    |
-| ------ | --------------------------- | -------------- |
-| GET    | `/api/trending/`            | Get Trending Content    |
+| Method | Endpoint                                    | Description            |
+| ------ | ------------------------------------------- | ---------------------- |
+| GET    | `/api/trending/`                            | Get Trending Content   |
+| GET    | `/api/trending/?media_type=movie`           | Get Trending Movies    |
+| GET    | `/api/trending/?media_type=tv`              | Get Trending TV Series |
+| GET    | `/api/actor/`                               | Get Popular Actor      |
+| GET    | `/api/popular_content/`                     | Get Popular Content    |
+| GET    | `/api/popular_content/?media_type=movie`    | Get Popular Movies     |
+| GET    | `/api/popular_content/?media_type=tv`       | Get Popular TV Series  |
+| GET    | `/api/upcoming_content/`                    | Get Upcoming Content   |
+| GET    | `/api/upcoming_content/?media_type=movie`   | Get Upcoming Movies    |
+| GET    | `/api/upcoming_content/?media_type=tv`      | Get Upcoming TV Series |
