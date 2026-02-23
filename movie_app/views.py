@@ -1,9 +1,74 @@
-from rest_framework.generics import ListAPIView
-from movie_app.models import TrendingContent
-from movie_app.serializers import TrendingContentSerializer
+from rest_framework.viewsets import ModelViewSet
+from movie_app.models import *
+from movie_app.serializers import *
+from rest_framework.response import Response
+from rest_framework import status
 
-class TrendingContentView(ListAPIView):
+class TrendingContentView(ModelViewSet):
+    queryset = TrendingContent.objects.all()
     serializer_class = TrendingContentSerializer
+    
+    def list(self, request):
+        trending = TrendingContent.objects.filter(trending=True).order_by('-popularity')
 
-    def get_queryset(self):
-        return TrendingContent.objects.filter(trending=True).order_by('-popularity')
+        media_type = request.query_params.get('media_type')
+        if media_type in ['movie', 'tv']:
+            trending = trending.filter(media_type=media_type)
+
+        serializer = self.get_serializer(trending, many=True)
+        return Response({
+            "status": True,
+            "message": "Trending Content are",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+    
+
+class ActorView(ModelViewSet):
+    queryset = Actor.objects.all()
+    serializer_class = PopularActorSerializer
+
+    def list(self, request):
+        actor = Actor.objects.filter().order_by("-popularity")
+        serializer = self.get_serializer(actor, many=True)
+        return Response({
+            "status": True,
+            "message": "Popular Actors are",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+    
+
+class PopularContentView(ModelViewSet):
+    queryset = Movie.objects.all()
+    serializer_class = PopularContentSerializer
+
+    def list(self, request):
+        movie = Movie.objects.filter(popularity__gt=80).order_by('-popularity')
+
+        media_type = request.query_params.get('media_type')
+        if media_type in ['movie', 'tv']:
+            movie = movie.filter(media_type=media_type)
+
+        serializer = self.get_serializer(movie, many=True)
+        return Response({
+            "status": True,
+            "message": "Popular Movies are",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+    
+
+class UpcomingContentView(ModelViewSet):
+    serializer_class = UpcomingContentSerializer
+
+    def list(self, request):
+        queryset = UpcomingContent.objects.all()
+
+        media_type = request.query_params.get("media_type")
+        if media_type in ["movie", "tv"]:
+            queryset = queryset.filter(media_type=media_type)
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            "status": True,
+            "message": "Upcoming content fetched successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
