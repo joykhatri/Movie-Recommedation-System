@@ -16,17 +16,23 @@ class TrendingContentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TrendingContent
-        fields = "__all__"
+        fields = ["id", "tmdb_id", "media_type", "title", "overview", "genres", "tagline", "release_date", "popularity", "vote_average", "poster_path", "backdrop_path", "trending", "cast", "updated_at"]
 
 class PopularContentSerializer(serializers.ModelSerializer):
     cast = ActorSerializer(many=True, read_only=True)
     class Meta:
         model = Movie
-        fields = "__all__"
+        fields = ["id", "tmdb_id", "media_type", "title", "overview", "genres", "tagline", "release_date", "popularity", "vote_average", "poster_path", "backdrop_path", "cast", "updated_at"]
 
 class UpcomingContentSerializer(serializers.ModelSerializer):
     cast = ActorSerializer(many=True, read_only=True)
 
     class Meta:
         model = UpcomingContent
-        fields = "__all__"
+        fields = ["id", "tmdb_id", "media_type", "title", "overview", "genres", "tagline", "release_date", "popularity", "poster_path", "backdrop_path", "cast", "created_at"]
+
+class TopRatedContentSerializer(serializers.ModelSerializer):
+    cast = ActorSerializer(many=True, read_only=True)
+    class Meta:
+        model = Movie
+        fields = ["id", "tmdb_id", "media_type", "title", "overview", "genres", "tagline", "release_date", "popularity", "vote_average", "poster_path", "backdrop_path", "cast", "updated_at"]
