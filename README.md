@@ -81,3 +81,4 @@ python manage.py runserver
 | GET    | `/api/upcoming_content/`                    | Get Upcoming Content   |
 | GET    | `/api/upcoming_content/?media_type=movie`   | Get Upcoming Movies    |
 | GET    | `/api/upcoming_content/?media_type=tv`      | Get Upcoming TV Series |
+| GET    | `/api/popular_content/?genres=Action`       | Filter Popular Content by Genres |
