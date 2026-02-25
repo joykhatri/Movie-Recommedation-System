@@ -101,3 +101,68 @@ class TopRatedContentView(ModelViewSet):
             "message": "Top Rated contents are",
             "data": serializer.data
         }, status=status.HTTP_200_OK)
+    
+
+class TVShowSeasonView(ModelViewSet):
+    queryset = Movie.objects.all()
+    serializer_class = TVShowSeasonSerializer
+
+    def list(self, request):
+        tvshows = Movie.objects.filter(media_type="tv").prefetch_related("seasons").order_by("-popularity")
+        serializer = self.get_serializer(tvshows, many=True)
+        return Response({
+            "status": True,
+            "message": "TV Shows seasons find successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+        
+    def retrieve(self, request, pk):
+        tvshows = Movie.objects.filter(media_type="tv", pk=pk).prefetch_related("seasons").order_by("-popularity")
+        if tvshows.exists():
+            serializer = self.get_serializer(tvshows, many=True)
+            return Response({
+                "status": True,
+                "message": "TV Shows seasons find successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                "status": False,
+                "message": "No TV Show found",
+                "data": None
+            }, status=status.HTTP_404_NOT_FOUND)
+    
+
+class SeasonEpisodeView(ModelViewSet):
+    queryset = Episode.objects.all()
+    serializer_class = SeasonEpisodeSerializer
+
+    def list(self, request):
+        tv_id = request.query_params.get("tv_id")
+        season_number = request.query_params.get("season_number")
+
+        if not tv_id or not season_number:
+            return Response({
+                "status": False,
+                "message": "tv_id and season_number are required",
+                "data": None
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        try:
+            season = Season.objects.get(tv_show__id=tv_id, season_number=int(season_number))
+        except Season.DoesNotExist:
+            return Response({
+                "status": False,
+                "message": "Season not found",
+                "data": None
+            }, status=404)
+        
+        episodes = Episode.objects.filter(season=season).order_by("episode_number")
+        serializer = self.get_serializer(episodes, many=True)
+
+        return Response({
+            "status": True,
+            "message": f"Episodes of season {season_number} fetched successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+    
