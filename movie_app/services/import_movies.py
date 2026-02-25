@@ -2,7 +2,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 from django.conf import settings
-from movie_app.models import TrendingContent, Actor, Movie, UpcomingContent
+from movie_app.models import TrendingContent, Actor, Movie, UpcomingContent, Season, Episode
 import time
 from datetime import datetime, date
 
@@ -63,6 +63,80 @@ def fetch_genres_and_tagline(media_type, content_id, title):
     return genres, tagline, detail_data
 
 
+def fetch_videos(media_type, tmdb_id, title):
+    detail_url = f"{BASE_URL}/{media_type}/{tmdb_id}/videos"
+    params = {"api_key": TMDB_API_KEY}
+
+    try:
+        detail_response = session.get(detail_url, params=params, timeout=10)
+        detail_response.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Error fetching videos for {title}: {e}")
+        
+    results = detail_response.json().get("results", [])
+
+    videos = [
+        {
+            "key": video["key"],
+            "name": video["name"],
+            "type": video["type"],
+            "site": video["site"],
+        }
+        for video in results
+        if video["site"] == "YouTube"
+        and video["type"] in ["Teaser", "Trailer"]
+        and video.get("official") is True
+    ]
+    return videos
+
+
+def fetch_tv_season_details(tv_id):
+    url = f"{BASE_URL}/tv/{tv_id}"
+    params = {"api_key": TMDB_API_KEY}
+
+    try:
+        response = session.get(url, params=params, timeout=10)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Failed to fetch TV details for {tv_id}: {e}")
+        return {}
+
+    return response.json()
+
+
+def fetch_and_save_episodes(tv_id, season_obj):
+    url = f"{BASE_URL}/tv/{tv_id}/season/{season_obj.season_number}"
+    params = {"api_key": TMDB_API_KEY}
+
+    try:
+        response = session.get(url, params=params, timeout=10)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Failed to fetch episode for season {season_obj.season_number}: {e}")
+        return
+    
+    data = response.json()
+    episodes = data.get("episodes", [])
+
+    for ep in episodes:
+        air_date = ep.get("air_date")
+        if air_date:
+            try:
+                air_date = datetime.strptime(air_date, "%Y-%m-%d").date()
+            except ValueError:
+                air_date = None
+
+        Episode.objects.update_or_create(
+            season = season_obj,
+            episode_number = ep.get("episode_number"),
+            name = ep.get("name"),
+            overview = ep.get("overview"),
+            air_date = air_date,
+            still_path = ep.get("still_path"),
+            vote_average = ep.get("vote_average")
+        )
+
+
 def fetch_trending_content(media_type="tv"):
     if media_type == "movie":
         url = f"{BASE_URL}/trending/{media_type}/day"
@@ -100,6 +174,8 @@ def fetch_trending_content(media_type="tv"):
 
         watch_providers = fetch_watch_providers(media_type, tmdb_id, title)
 
+        videos = fetch_videos(media_type, tmdb_id, title)
+
         print(f"Saving movie: {title} ({tmdb_id}) with providers: {watch_providers}")
 
         try:
@@ -117,6 +193,7 @@ def fetch_trending_content(media_type="tv"):
                     "vote_average": detail_data.get("vote_average") or content.get("vote_average"),
                     "popularity": detail_data.get("popularity") or content.get("popularity"),
                     "watch_providers": watch_providers,
+                    "videos": videos,
                     "trending": True,
                 },
             )
@@ -235,7 +312,6 @@ def fetch_popular_actors():
             except requests.RequestException as e:
                     print(f"Error fetching details for {name}: {e}")
 
-
         time.sleep(0.5)
 
 
@@ -244,7 +320,7 @@ def fetch_popular_content(media_type="tv"):
     url = f"{BASE_URL}/tv/popular"
     params = {
         "api_key": TMDB_API_KEY,
-        "page": 6,
+        "page": 1,
         "append_to_response": "credits"
     }
 
@@ -261,26 +337,10 @@ def fetch_popular_content(media_type="tv"):
         content_id = content_data.get("id")
         title = content_data.get("title") or content_data.get("name")
         release_date = content_data.get("release_date") or content_data.get("first_air_date") or None
-
-        genres, tagline = [], ""
-        detail_url = f"{BASE_URL}/{media_type}/{content_id}"
-
-        try:
-            detail_response = session.get(
-                detail_url,
-                params={"api_key": TMDB_API_KEY, "append_to_response": "credits"},
-                timeout=10
-            )
-            if detail_response.status_code == 200:
-                detail_data = detail_response.json()
-                genres = [g['name'] for g in detail_data.get("genres", [])]
-                tagline = detail_data.get("tagline") or ""
-            else:
-                print(f"Failed to fetch details for {title}")
-        except requests.RequestException as e:
-            print(f"Exception fetching details for {title}: {e}")
         
+        genres, tagline, detail_data = fetch_genres_and_tagline(media_type, content_id, title)
         watch_providers = fetch_watch_providers(media_type, content_id, title)
+        videos = fetch_videos(media_type, content_id, title)
 
         print(f"Saving content: {title} with providers: {watch_providers}")
 
@@ -298,13 +358,42 @@ def fetch_popular_content(media_type="tv"):
                     "vote_average": detail_data.get("vote_average"),
                     "poster_path": detail_data.get("poster_path"),
                     "backdrop_path": detail_data.get("backdrop_path"),
-                    "watch_providers": watch_providers
+                    "watch_providers": watch_providers,
+                    "videos": videos
                 },
             )
         except Exception as e:
             print(f"Error saving {title}: {e}")
 
         fetch_and_save_cast(content_id, media_type, content)
+
+        if media_type == "tv":
+            try:
+                tv_details = fetch_tv_season_details(content_id)
+                seasons_data = tv_details.get("seasons", [])
+
+                for season in seasons_data:
+                    air_date = season.get("air_date")
+                    if air_date:
+                        try:
+                            air_date = datetime.strptime(air_date, "%Y-%m-%d").date()
+                        except ValueError:
+                            air_date = None
+
+                    season_obj, _ = Season.objects.update_or_create(
+                        tv_show = content,
+                        season_number = season.get("season_number"),
+                        name = season.get("name"),
+                        overview = season.get("overview"),
+                        air_date = air_date,
+                        episode_count = season.get("episode_count"),
+                        poster_path = season.get("poster_path")
+                    )
+            except Exception as e:
+                print(f"Error fetching season for {title}: {e}")
+            
+            fetch_and_save_episodes(content_id, season_obj)
+
         time.sleep(2)
     print("Popular Content synced successfully")
 
@@ -319,7 +408,7 @@ def fetch_upcoming_content(media_type="movie"):
 
     params = {
         "api_key": TMDB_API_KEY,
-        "page": 2,
+        "page": 1,
         "append_to_response": "credits"
     }
 
@@ -346,6 +435,8 @@ def fetch_upcoming_content(media_type="movie"):
             continue
 
         genres, tagline, detail_data = fetch_genres_and_tagline(media_type, content_id, title)
+        watch_providers = fetch_watch_providers(media_type, content_id, title)
+        videos = fetch_videos(media_type, content_id, title)
 
         print(f"Saving content: {title}")
 
@@ -361,7 +452,9 @@ def fetch_upcoming_content(media_type="movie"):
                     "release_date": release_date,
                     "popularity": detail_data.get("popularity"),
                     "poster_path": detail_data.get("poster_path"),
-                    "backdrop_path": detail_data.get("backdrop_path")
+                    "backdrop_path": detail_data.get("backdrop_path"),
+                    "watch_providers": watch_providers,
+                    "videos": videos
                 }
             )
         except Exception as e:
@@ -388,7 +481,7 @@ def fetch_upcoming_hindi_content(media_type="movie"):
         "region": "IN",
         date_field: date.today().isoformat(),
         "sort_by": sort_field,
-        "page": 1
+        "page": 3
     }
 
     try:
@@ -414,7 +507,9 @@ def fetch_upcoming_hindi_content(media_type="movie"):
             continue
 
         genres, tagline, detail_data = fetch_genres_and_tagline(media_type, content_id, title)
-        
+        watch_providers = fetch_watch_providers(media_type, content_id, title)
+        videos = fetch_videos(media_type, content_id, title)
+
         print(f"Saving content: {title}")
 
         try:
@@ -429,7 +524,9 @@ def fetch_upcoming_hindi_content(media_type="movie"):
                     "release_date": release_date,
                     "popularity": detail_data.get("popularity"),
                     "poster_path": detail_data.get("poster_path"),
-                    "backdrop_path": detail_data.get("backdrop_path")
+                    "backdrop_path": detail_data.get("backdrop_path"),
+                    "watch_providers": watch_providers,
+                    "videos": videos
                 }
             )
         except Exception as e:
