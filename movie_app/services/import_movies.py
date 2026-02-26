@@ -127,17 +127,19 @@ def fetch_and_save_episodes(tv_id, season_obj):
                 air_date = None
 
         Episode.objects.update_or_create(
-            season = season_obj,
-            episode_number = ep.get("episode_number"),
-            name = ep.get("name"),
-            overview = ep.get("overview"),
-            air_date = air_date,
-            still_path = ep.get("still_path"),
-            vote_average = ep.get("vote_average")
+            season=season_obj,
+            episode_number=ep.get("episode_number"),
+            defaults={
+                "name": ep.get("name"),
+                "overview": ep.get("overview"),
+                "air_date": air_date,
+                "still_path": ep.get("still_path"),
+                "vote_average": ep.get("vote_average"),
+            }
         )
 
 
-def fetch_trending_content(media_type="tv"):
+def fetch_trending_content(media_type="movie"):
     if media_type == "movie":
         url = f"{BASE_URL}/trending/{media_type}/day"
     elif media_type == "tv":
@@ -320,7 +322,7 @@ def fetch_popular_content(media_type="tv"):
     url = f"{BASE_URL}/tv/popular"
     params = {
         "api_key": TMDB_API_KEY,
-        "page": 1,
+        "page": 6,
         "append_to_response": "credits"
     }
 
@@ -373,6 +375,11 @@ def fetch_popular_content(media_type="tv"):
                 seasons_data = tv_details.get("seasons", [])
 
                 for season in seasons_data:
+                    season_number = season.get("season_number")
+
+                    if season_number == 0:
+                        continue
+
                     air_date = season.get("air_date")
                     if air_date:
                         try:
@@ -380,20 +387,25 @@ def fetch_popular_content(media_type="tv"):
                         except ValueError:
                             air_date = None
 
-                    season_obj, _ = Season.objects.update_or_create(
-                        tv_show = content,
-                        season_number = season.get("season_number"),
-                        name = season.get("name"),
-                        overview = season.get("overview"),
-                        air_date = air_date,
-                        episode_count = season.get("episode_count"),
-                        poster_path = season.get("poster_path")
-                    )
+                    try:
+                        season_obj, _ = Season.objects.update_or_create(
+                            tv_show = content,
+                            season_number = season.get("season_number"),
+                            name = season.get("name"),
+                            overview = season.get("overview"),
+                            air_date = air_date,
+                            episode_count = season.get("episode_count"),
+                            poster_path = season.get("poster_path")
+                        )
+                    except Exception as e:
+                        print(f"Error creating/updating season {season_number} for {title}: {e}")
+                        continue
+
+                    fetch_and_save_episodes(content_id, season_obj)
+
             except Exception as e:
                 print(f"Error fetching season for {title}: {e}")
             
-            fetch_and_save_episodes(content_id, season_obj)
-
         time.sleep(2)
     print("Popular Content synced successfully")
 
