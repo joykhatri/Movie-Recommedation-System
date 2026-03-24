@@ -85,3 +85,5 @@ python manage.py runserver
 | GET    | `/api/top_rated_content/`                           | Get Top Rated Content                    |
 | GET    | `/api/tv_show_season/`                              | TV Show Season Deatils                   |
 | GET    | `/api/season_episodes/?tv_id=45926&season_number=8` | TV Show Seasons Episodes Details         |
+
+- For fetch any content in Database run scheduler.
